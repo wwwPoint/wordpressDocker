@@ -1,0 +1,91 @@
+# Версія Docker Compose
+version: '3.9'
+
+# Визначення сервісів
+services:
+   # База даних MySQL
+   mysql:
+      image: mysql:5.7 # Використовуємо MySQL версії 5.7
+      restart: always # Автоматичний перезапуск при збої
+      ports:
+         - '3306:3306' # Прокидання порту MySQL
+      volumes:
+         - './.srv/database:/var/lib/mysql' # Зберігання даних БД
+         - './mysql/conf.d:/etc/mysql/conf.d' # Конфігурація MySQL
+      environment: # Змінні середовища для налаштування MySQL
+         MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+         MYSQL_DATABASE: ${MYSQL_DATABASE}
+         MYSQL_USER: ${MYSQL_USER}
+         MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      networks:
+         - wordpress-network # Підключення до мережі
+
+   # WordPress з PHP-FPM
+   wordpress:
+      image: wordpress:fpm # Використовуємо WordPress з PHP-FPM
+      depends_on:
+         - mysql # Залежність від MySQL
+      restart: always
+      environment: # Налаштування WordPress
+         WORDPRESS_DB_HOST: mysql:3306
+         WORDPRESS_DB_USER: ${MYSQL_USER}
+         WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+         WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+         WORDPRESS_DEBUG: 1 # Увімкнення режиму налагодження
+      volumes: # Монтування директорій
+         - ./.srv/wordpress:/var/www/html # Файли WordPress
+         - ./themes:/var/www/html/wp-content/themes:rw # Теми
+         - ./plugins:/var/www/html/wp-content/plugins:rw # Плагіни
+         #  - ./mu-plugins:/var/www/html/wp-content/mu-plugins:rw # Плагіни мультисайтів
+         - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini # Налаштування PHP
+      networks:
+         - wordpress-network
+
+   # Веб-сервер Nginx
+   nginx:
+      image: nginx:latest # Останння версія Nginx
+      depends_on:
+         - wordpress # Залежність від WordPress
+      ports: # Прокидання портів
+         - '80:80' # HTTP
+         - '443:443' # HTTPS
+      volumes:
+         - ./.srv/wordpress:/var/www/html # Файли WordPress
+         - ./nginx/conf.d:/etc/nginx/conf.d # Конфігурація Nginx
+         - ./nginx/ssl:/etc/nginx/ssl # SSL сертифікати
+         - ./nginx/logs:/var/log/nginx # Логи
+      networks:
+         - wordpress-network
+
+   # Adminer для управління базою даних
+   adminer:
+      image: adminer:latest
+      depends_on:
+         - mysql
+      restart: always
+      environment:
+         ADMINER_DEFAULT_SERVER: mysql
+         ADMINER_DESIGN: pepa-linha # Тема оформлення
+      networks:
+         - wordpress-network
+
+   # MailHog для тестування електронної пошти
+   mailhog:
+      image: mailhog/mailhog
+      ports:
+         - '1025:1025' # SMTP порт
+         - '8025:8025' # Веб-інтерфейс
+      networks:
+         - wordpress-network
+
+   # Redis для кешування
+   redis:
+      image: redis:alpine
+      restart: always
+      networks:
+         - wordpress-network
+
+# Налаштування мережі
+networks:
+   wordpress-network:
+      driver: bridge # Використання bridge драйвера для мережі

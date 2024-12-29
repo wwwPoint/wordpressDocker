@@ -1,0 +1,53 @@
+# WordPress Core
+/wp-admin/
+/wp-content/index.php
+/wp-content/languages
+/wp-content/plugins/index.php
+/wp-content/themes/index.php
+/wp-includes/
+/index.php
+/license.txt
+/readme.html
+/wp-*.php
+/xmlrpc.php
+
+# Конфігураційні файли
+wp-config.php
+wp-config-sample.php
+.htaccess
+
+# Директорії wp-content
+/wp-content/upgrade/
+/wp-content/backup-db/
+/wp-content/backups/
+/wp-content/blogs.dir/
+/wp-content/cache/
+/wp-content/upgrade/
+/wp-content/uploads/
+/wp-content/mu-plugins/
+/wp-content/wp-cache-config.php
+
+# Файли логів
+*.log
+error_log
+access_log
+
+# Файли бази даних
+*.sql
+*.sqlite
+
+# Файли середовища розробки
+.env
+.env.*
+!.env.example
+
+# Тимчасові файли
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# Директорії Docker
+/.srv/
+/mysql/
+/nginx/
