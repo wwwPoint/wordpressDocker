@@ -30,4 +30,53 @@ server {
 }
 EOF
 
-echo "Success!"
+
+echo "Налаштування MySQL параметрів"
+echo "----------------------------"
+
+# Функція для валідації введених даних
+validate_input() {
+    if [ -z "$1" ]; then
+        echo "Помилка: значення не може бути пустим"
+        exit 1
+    fi
+}
+
+# Запитуємо значення з валідацією
+while true; do
+    read -p "Введіть пароль для root користувача MySQL: " root_password
+    validate_input "$root_password"
+    if [ $? -eq 0 ]; then break; fi
+done
+
+while true; do
+    read -p "Введіть назву бази даних: " database
+    validate_input "$database"
+    if [ $? -eq 0 ]; then break; fi
+done
+
+while true; do
+    read -p "Введіть ім'я користувача MySQL: " user
+    validate_input "$user"
+    if [ $? -eq 0 ]; then break; fi
+done
+
+while true; do
+    read -p "Введіть пароль для користувача MySQL: " password
+    validate_input "$password"
+    if [ $? -eq 0 ]; then break; fi
+done
+
+# Створюємо .env файл
+cat > .env << EOF
+MYSQL_ROOT_PASSWORD=${root_password}
+MYSQL_DATABASE=${database}
+MYSQL_USER=${user}
+MYSQL_PASSWORD=${password}
+EOF
+
+echo "Файл .env успішно створено!"
+echo "Запускаємо docker-compose..."
+
+# Запускаємо docker-compose
+docker-compose up -d
