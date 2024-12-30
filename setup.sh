@@ -76,6 +76,7 @@ MYSQL_PASSWORD=${password}
 EOF
 
 echo "Файл .env успішно створено!"
+echo "============================"
 echo "Запускаємо docker-compose..."
 
 # Запускаємо docker-compose
