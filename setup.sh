@@ -44,25 +44,25 @@ validate_input() {
 
 # Запитуємо значення з валідацією
 while true; do
-    read -p "Введіть пароль для root користувача MySQL: " root_password
+    read -p "Введіть ПАРОЛЬ для root користувача MySQL: " root_password
     validate_input "$root_password"
     if [ $? -eq 0 ]; then break; fi
 done
 
 while true; do
-    read -p "Введіть назву бази даних: " database
+    read -p "Введіть НАЗВУ БАЗИ даних: " database
     validate_input "$database"
     if [ $? -eq 0 ]; then break; fi
 done
 
 while true; do
-    read -p "Введіть ім'я користувача MySQL: " user
+    read -p "Введіть ІМ'Я користувача MySQL: " user
     validate_input "$user"
     if [ $? -eq 0 ]; then break; fi
 done
 
 while true; do
-    read -p "Введіть пароль для користувача MySQL: " password
+    read -p "Введіть ПАРОЛЬ для користувача MySQL: " password
     validate_input "$password"
     if [ $? -eq 0 ]; then break; fi
 done
