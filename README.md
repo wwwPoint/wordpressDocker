@@ -1,16 +1,18 @@
-Запустити скрипт для створення директорій:
+1. В "Git Bash" запустити скрипт для створення директорій:
 
-```
+```bash
 ./setup.sh
 
 якщо не працює, то запустити в такому пордку:
-1. chmod +x setup.sh
-2. ./setup.sh
+a. chmod +x setup.sh
+b. ./setup.sh
 ```
 
-Запустити проект:
+<!-- ============================================ -->
 
-```
+2. Запустити проект:
+
+```bash
 docker compose up -d
 
 docker compose up -d --build # якщо потрібно перебудувати проект
@@ -20,14 +22,14 @@ docker compose up -d --force-recreate # якщо потрібно перезап
 docker compose up -d --build --force-recreate --remove-orphans # якщо потрібно перебудувати проект і перезапустити контейнери і видалити невикористовувані контейнери
 ```
 
-Зупинити проект:
+    2.1. Зупинити проект:
 
-```
-docker compose down
-```
+    ```bash
+    docker compose down
+    ```
 
-Перезапустити проект:
+    2.2. Перезапустити проект:
 
-```
-docker compose restart
-```
+    ```bash
+    docker compose restart
+    ```
