@@ -16,27 +16,46 @@ services:
          MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       networks:
          - wordpress-network # Підключення до мережі
+      command: --default-authentication-plugin=mysql_native_password # Додати для кращої сумісності
+      healthcheck: # Додати перевірку здоров'я
+         test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+         interval: 10s
+         timeout: 5s
+         retries: 5
 
    # WordPress з PHP-FPM
    wordpress:
       image: wordpress:fpm # Використовуємо WordPress з PHP-FPM
       depends_on:
-         - mysql # Залежність від MySQL
+         - mysql
+         - redis
       restart: always
       environment: # Налаштування WordPress
          WORDPRESS_DB_HOST: mysql:3306
          WORDPRESS_DB_USER: ${MYSQL_USER}
          WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
          WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
-         WORDPRESS_DEBUG: 1 # Увімкнення режиму налагодження
+         WORDPRESS_DEBUG: ${WORDPRESS_DEBUG}
+         WORDPRESS_CONFIG_EXTRA: |
+            define('WP_MEMORY_LIMIT', '256M');
+            define('WP_MAX_MEMORY_LIMIT', '512M');
+            define('WP_REDIS_HOST', 'redis');
+            define('WP_REDIS_PORT', 6379);
+            define('WP_HOME','https://localhost');
+            define('WP_SITEURL','https://localhost');
+         WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
       volumes: # Монтування директорій
          - ./.srv/wordpress:/var/www/html # Файли WordPress
          - ./themes:/var/www/html/wp-content/themes:rw # Теми
          - ./plugins:/var/www/html/wp-content/plugins:rw # Плагіни
          #  - ./mu-plugins:/var/www/html/wp-content/mu-plugins:rw # Плагіни мультисайтів
-         - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini # Налаштування PHP
       networks:
          - wordpress-network
+      healthcheck: # Додати перевірку здоров'я
+         test: ['CMD', 'php', '-v']
+         interval: 30s
+         timeout: 10s
+         retries: 3
 
    # Веб-сервер Nginx
    nginx:
@@ -51,8 +70,14 @@ services:
          - ./nginx/conf.d:/etc/nginx/conf.d # Конфігурація Nginx
          - ./nginx/ssl:/etc/nginx/ssl # SSL сертифікати
          - ./nginx/logs:/var/log/nginx # Логи
+         - ./nginx.conf:/etc/nginx/nginx.conf # Додаємо монтування основного конфігу
       networks:
          - wordpress-network
+      healthcheck: # Додати перевірку здоров'я
+         test: ['CMD', 'nginx', '-t']
+         interval: 30s
+         timeout: 10s
+         retries: 3
 
    # Adminer для управління базою даних
    adminer:
@@ -65,6 +90,8 @@ services:
          ADMINER_DESIGN: pepa-linha # Тема оформлення
       networks:
          - wordpress-network
+      ports:
+         - '8080:8080'
 
    # MailHog для тестування електронної пошти
    mailhog:

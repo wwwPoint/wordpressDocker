@@ -1,6 +1,18 @@
 #!/bin/bash
 set -e  # Зупиняти скрипт при помилках
 
+# Завантажуємо змінні з .env файлу
+if [ -f .env ]; then
+    echo "Знайдено .env файл"
+    export $(cat .env | grep -v '#' | awk '/=/ {print $1}')
+    
+    # Додаємо діагностичний вивід
+    echo "Завантажені змінні з .env:"
+    echo "DOMAIN_NAME = ${DOMAIN_NAME}"
+    echo "MYSQL_USER = ${MYSQL_USER}"
+    echo "MYSQL_DATABASE = ${MYSQL_DATABASE}"
+fi
+
 # Додати перевірку наявності Docker
 if ! command -v docker &> /dev/null; then
     echo "Docker не встановлено. Будь ласка, встановіть Docker спочатку."
@@ -20,10 +32,16 @@ trap cleanup EXIT
 if [ ! -f "nginx/ssl/cert.pem" ] || [ ! -f "nginx/ssl/key.pem" ]; then
     echo "Генерування self-signed SSL сертифікатів..."
     mkdir -p nginx/ssl
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    
+    # Виправлена команда для localhost
+    MSYS_NO_PATHCONV=1 openssl req -x509 \
+        -nodes \
+        -days 365 \
+        -newkey rsa:2048 \
         -keyout nginx/ssl/key.pem \
         -out nginx/ssl/cert.pem \
-        -subj "/C=UA/ST=State/L=City/O=Organization/CN=localhost"
+        -subj "/C=UA/ST=State/L=City/O=Organization/CN=localhost" \
+        -addext "subjectAltName=DNS:localhost"
 fi
 
 mkdir -p .srv/database
@@ -94,13 +112,33 @@ while true; do
     if [ $? -eq 0 ]; then break; fi
 done
 
+# Додані нові цикли
+while true; do
+    read -p "Введіть ПРЕФІКС таблиць WordPress (wp_): " table_prefix
+    table_prefix=${table_prefix:-wp_}
+    validate_input "$table_prefix"
+    if [ $? -eq 0 ]; then break; fi
+done
+
+while true; do
+    read -p "Введіть режим налагодження WordPress (0/1): " debug_mode
+    debug_mode=${debug_mode:-0}
+    if [[ "$debug_mode" =~ ^[0-1]$ ]]; then break; fi
+    echo "Помилка: введіть 0 або 1"
+done
+
 # Створюємо .env файл
 cat > .env << EOF
 MYSQL_ROOT_PASSWORD=${root_password}
 MYSQL_DATABASE=${database}
 MYSQL_USER=${user}
 MYSQL_PASSWORD=${password}
+WORDPRESS_TABLE_PREFIX=${table_prefix}
+WORDPRESS_DEBUG=${debug_mode}
 EOF
+
+# Перезавантажуємо змінні з нового .env файлу
+export $(cat .env | grep -v '#' | awk '/=/ {print $1}')
 
 echo "Файл .env успішно створено!"
 echo "============================"
@@ -124,13 +162,8 @@ sleep 5
 echo ""
 echo "=== Доступні сервіси ==="
 echo "WordPress:"
-if [ -n "${DOMAIN_NAME}" ]; then
-    echo "🌐 http://${DOMAIN_NAME}"
-    echo "🔒 https://${DOMAIN_NAME}"
-else
-    echo "🌐 http://localhost"
-    echo "🔒 https://localhost"
-fi
+echo "🌐 http://localhost"
+echo "🔒 https://localhost"
 
 if check_port 8080; then
     echo ""
@@ -147,10 +180,6 @@ if check_port 8025; then
     echo "📧 http://localhost:8025"
     echo "   SMTP: localhost:1025"
 fi
-
-echo ""
-echo "=== Статус контейнерів ==="
-docker-compose ps
 
 echo ""
 echo "✅ Всі сервіси запущено успішно!"
