@@ -10,7 +10,7 @@ b. ./setup.sh
 
 1.1. Вивести посилання на сервіси:
 
-```
+```bash
 ./show-urls.sh
 ```
 
@@ -28,14 +28,14 @@ docker compose up -d --force-recreate # якщо потрібно перезап
 docker compose up -d --build --force-recreate --remove-orphans # якщо потрібно перебудувати проект і перезапустити контейнери і видалити невикористовувані контейнери
 ```
 
-    2.1. Зупинити проект:
+2.1. Зупинити проект:
 
-    ```bash
-    docker compose down
-    ```
+```bash
+docker compose down
+```
 
-    2.2. Перезапустити проект:
+2.2. Перезапустити проект:
 
-    ```bash
-    docker compose restart
-    ```
+```bash
+docker compose restart
+```
