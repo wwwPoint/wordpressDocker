@@ -96,27 +96,27 @@ services:
          - '8080:8080' # Порт для доступу до Adminer
 
    # # MailHog для тестування електронної пошти
-   # mailhog:
-   #    image: mailhog/mailhog # Останння версія MailHog
-   #    ports:
-   #       - '1025:1025' # SMTP порт
-   #       - '8025:8025' # Веб-інтерфейс
-   #    networks:
-   #       - wordpress-network # Підключення до мережі
+   mailhog:
+      image: mailhog/mailhog # Останння версія MailHog
+      ports:
+         - '1025:1025' # SMTP порт
+         - '8025:8025' # Веб-інтерфейс
+      networks:
+         - wordpress-network # Підключення до мережі
 
    # Redis для кешування
-   # redis:
-   #    image: redis:alpine # Легка версія Redis
-   #    restart: always # Автоматичний перезапуск при збої
-   #    volumes:
-   #       - redis_data:/data # Для збереження даних
-   #    healthcheck:
-   #       test: ['CMD', 'redis-cli', 'ping'] # Перевірка доступності Redis
-   #       interval: 30s # Інтервал перевірки
-   #       timeout: 10s # Таймаут перевірки
-   #       retries: 3 # Кількість спроб
-   #    networks:
-   #       - wordpress-network # Підключення до мережі
+   redis:
+      image: redis:alpine # Легка версія Redis
+      restart: always # Автоматичний перезапуск при збої
+      volumes:
+         - redis_data:/data # Для збереження даних
+      healthcheck:
+         test: ['CMD', 'redis-cli', 'ping'] # Перевірка доступності Redis
+         interval: 30s # Інтервал перевірки
+         timeout: 10s # Таймаут перевірки
+         retries: 3 # Кількість спроб
+      networks:
+         - wordpress-network # Підключення до мережі
 
 # Налаштування мережі
 networks:
