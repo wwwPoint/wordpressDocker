@@ -28,7 +28,7 @@ services:
       image: wordpress:fpm # Використовуємо WordPress з PHP-FPM
       depends_on:
          - mysql # Залежність від MySQL
-         # - redis # Залежність від Redis
+         - redis # Залежність від Redis
       restart: always # Автоматичний перезапуск при збої
       environment: # Налаштування WordPress
          WORDPRESS_DB_HOST: mysql:3306 # Хост і порт для підключення до БД
