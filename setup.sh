@@ -1,13 +1,6 @@
 #!/bin/bash
 set -e  # Зупиняти скрипт при помилках
 
-# Функція для перевірки доступності порту
-check_port() {
-    local port=$1
-    timeout 1 bash -c "</dev/tcp/localhost/$port" &>/dev/null
-    return $?
-}
-
 # Завантажуємо змінні з .env файлу
 if [ -f .env ]; then
     echo "Знайдено .env файл"
@@ -51,7 +44,6 @@ if [ ! -f "nginx/ssl/cert.pem" ] || [ ! -f "nginx/ssl/key.pem" ]; then
         -addext "subjectAltName=DNS:localhost"
 fi
 
-# Створення необхідних директорій
 mkdir -p .srv/database
 mkdir -p .srv/wordpress
 mkdir -p nginx/conf.d
@@ -82,6 +74,7 @@ server {
     }
 }
 EOF
+
 
 echo "Налаштування MySQL параметрів"
 echo "----------------------------"
@@ -154,9 +147,16 @@ echo "Запускаємо docker-compose..."
 # Запускаємо docker-compose
 docker-compose up -d
 
+# Функція для перевірки доступності порту
+check_port() {
+    local port=$1
+    timeout 1 bash -c "</dev/tcp/localhost/$port" &>/dev/null
+    return $?
+}
+
 # Очікуємо поки всі сервіси запустяться
 echo "Очікуємо запуску сервісів..."
-sleep 10
+sleep 5
 
 # Виводимо інформацію про доступні сервіси
 echo ""

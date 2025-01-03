@@ -28,7 +28,7 @@ services:
       image: wordpress:fpm # Використовуємо WordPress з PHP-FPM
       depends_on:
          - mysql # Залежність від MySQL
-         - redis # Залежність від Redis
+         # - redis # Залежність від Redis
       restart: always # Автоматичний перезапуск при збої
       environment: # Налаштування WordPress
          WORDPRESS_DB_HOST: mysql:3306 # Хост і порт для підключення до БД
@@ -89,34 +89,34 @@ services:
       restart: always # Автоматичний перезапуск при збої
       environment:
          ADMINER_DEFAULT_SERVER: mysql # Сервер за замовчуванням
-         ADMINER_DESIGN: pepa-linha # Тема оформлення
+         ADMINER_DESIGN: flat # Тема оформлення : flat, hever, dracula
       networks:
          - wordpress-network # Підключення до мережі
       ports:
          - '8080:8080' # Порт для доступу до Adminer
 
-   # MailHog для тестування електронної пошти
-   mailhog:
-      image: mailhog/mailhog # Останння версія MailHog
-      ports:
-         - '1025:1025' # SMTP порт
-         - '8025:8025' # Веб-інтерфейс
-      networks:
-         - wordpress-network # Підключення до мережі
+   # # MailHog для тестування електронної пошти
+   # mailhog:
+   #    image: mailhog/mailhog # Останння версія MailHog
+   #    ports:
+   #       - '1025:1025' # SMTP порт
+   #       - '8025:8025' # Веб-інтерфейс
+   #    networks:
+   #       - wordpress-network # Підключення до мережі
 
    # Redis для кешування
-   redis:
-      image: redis:alpine # Легка версія Redis
-      restart: always # Автоматичний перезапуск при збої
-      volumes:
-         - redis_data:/data # Для збереження даних
-      healthcheck:
-         test: ['CMD', 'redis-cli', 'ping'] # Перевірка доступності Redis
-         interval: 30s # Інтервал перевірки
-         timeout: 10s # Таймаут перевірки
-         retries: 3 # Кількість спроб
-      networks:
-         - wordpress-network # Підключення до мережі
+   # redis:
+   #    image: redis:alpine # Легка версія Redis
+   #    restart: always # Автоматичний перезапуск при збої
+   #    volumes:
+   #       - redis_data:/data # Для збереження даних
+   #    healthcheck:
+   #       test: ['CMD', 'redis-cli', 'ping'] # Перевірка доступності Redis
+   #       interval: 30s # Інтервал перевірки
+   #       timeout: 10s # Таймаут перевірки
+   #       retries: 3 # Кількість спроб
+   #    networks:
+   #       - wordpress-network # Підключення до мережі
 
 # Налаштування мережі
 networks:
