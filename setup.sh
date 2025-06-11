@@ -121,7 +121,7 @@ while true; do
 done
 
 while true; do
-    read -p "Введіть режим налагодження WordPress (0/1): " debug_mode
+    read -p "Введіть debug mode (0/1): " debug_mode
     debug_mode=${debug_mode:-0}
     if [[ "$debug_mode" =~ ^[0-1]$ ]]; then break; fi
     echo "Помилка: введіть 0 або 1"
