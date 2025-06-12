@@ -1,128 +1,114 @@
-# Визначення сервісів
+# Оптимізована конфігурація з Caddy
 services:
    # База даних MySQL
    mysql:
-      image: mysql:5.7 # Використовуємо MySQL версії 5.7
-      restart: always # Автоматичний перезапуск при збої
+      image: mysql:8.0
+      restart: always
       ports:
-         - '3307:3306' # Прокидання порту MySQL для доступу ззовні
+         - '3307:3306'
       volumes:
-         - './.srv/database:/var/lib/mysql' # Зберігання даних БД на хості
-         - './mysql/conf.d:/etc/mysql/conf.d' # Додаткові конфігурації MySQL
-      environment: # Змінні середовища для налаштування MySQL
-         MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD} # Пароль для root користувача
-         MYSQL_DATABASE: ${MYSQL_DATABASE} # Ім'я бази даних за замовчуванням
-         MYSQL_USER: ${MYSQL_USER} # Ім'я користувача для доступу до БД
-         MYSQL_PASSWORD: ${MYSQL_PASSWORD} # Пароль для користувача
+         - './.data/mysql:/var/lib/mysql'
+      environment:
+         MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+         MYSQL_DATABASE: ${MYSQL_DATABASE}
+         MYSQL_USER: ${MYSQL_USER}
+         MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       networks:
-         - wordpress-network # Підключення до мережі
-      command: --default-authentication-plugin=mysql_native_password # Додати для кращої сумісності
-      healthcheck: # Додати перевірку здоров'я
-         test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost'] # Перевірка доступності MySQL
-         interval: 10s # Інтервал перевірки
-         timeout: 5s # Таймаут перевірки
-         retries: 5 # Кількість спроб
+         - wp-network
+      command: --default-authentication-plugin=mysql_native_password
+      healthcheck:
+         test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+         interval: 30s
+         timeout: 10s
+         retries: 3
 
    # WordPress з PHP-FPM
    wordpress:
-      image: wordpress:fpm # Використовуємо WordPress з PHP-FPM
+      image: wordpress:fpm-alpine
       depends_on:
-         - mysql # Залежність від MySQL
-         - redis # Залежність від Redis
-      restart: always # Автоматичний перезапуск при збої
-      environment: # Налаштування WordPress
-         WORDPRESS_DB_HOST: mysql:3306 # Хост і порт для підключення до БД
-         WORDPRESS_DB_USER: ${MYSQL_USER} # Ім'я користувача БД
-         WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD} # Пароль користувача БД
-         WORDPRESS_DB_NAME: ${MYSQL_DATABASE} # Ім'я бази даних
-         WORDPRESS_DEBUG: ${WORDPRESS_DEBUG} # Режим налагодження
-         WORDPRESS_CONFIG_EXTRA: | # Додаткові налаштування WordPress
-            define('WP_MEMORY_LIMIT', '256M'); # Ліміт пам'яті для WordPress
-            define('WP_MAX_MEMORY_LIMIT', '512M'); # Максимальний ліміт пам'яті
-            define('WP_REDIS_HOST', 'redis'); # Хост для Redis
-            define('WP_REDIS_PORT', 6379); # Порт для Redis
-            define('WP_REDIS_DATABASE', 0); # Номер бази даних Redis
-            define('WP_CACHE', true); # Увімкнення кешування
-            define('WP_REDIS_PREFIX', '${WORDPRESS_TABLE_PREFIX}'); # Префікс для Redis
-            define('WP_HOME','https://localhost'); # Домашня URL
-            define('WP_SITEURL','https://localhost'); # URL сайту
-         WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX} # Префікс таблиць у БД
-      volumes: # Монтування директорій
-         - ./.srv/wordpress:/var/www/html # Файли WordPress
-         - ./themes:/var/www/html/wp-content/themes:rw # Теми
-         - ./plugins:/var/www/html/wp-content/plugins:rw # Плагіни
-      networks:
-         - wordpress-network # Підключення до мережі
-      healthcheck: # Додати перевірку здоров'я
-         test: ['CMD', 'php', '-v'] # Перевірка доступності PHP
-         interval: 30s # Інтервал перевірки
-         timeout: 10s # Таймаут перевірки
-         retries: 3 # Кількість спроб
-
-   # Веб-сервер Nginx
-   nginx:
-      image: nginx:latest # Останння версія Nginx
-      depends_on:
-         - wordpress # Залежність від WordPress
-      ports: # Прокидання портів
-         - '80:80' # HTTP
-         - '443:443' # HTTPS
-      volumes:
-         - ./.srv/wordpress:/var/www/html # Файли WordPress
-         - ./nginx/conf.d:/etc/nginx/conf.d # Конфігурація Nginx
-         - ./nginx/ssl:/etc/nginx/ssl # SSL сертифікати
-         - ./nginx/logs:/var/log/nginx # Логи
-         - ./nginx.conf:/etc/nginx/nginx.conf # Додаємо монтування основного конфігу
-      networks:
-         - wordpress-network # Підключення до мережі
-      healthcheck: # Додати перевірку здоров'я
-         test: ['CMD', 'nginx', '-t'] # Перевірка конфігурації Nginx
-         interval: 30s # Інтервал перевірки
-         timeout: 10s # Таймаут перевірки
-         retries: 3 # Кількість спроб
-
-   # Adminer для управління базою даних
-   adminer:
-      image: adminer:latest # Останння версія Adminer
-      depends_on:
-         - mysql # Залежність від MySQL
-      restart: always # Автоматичний перезапуск при збої
+         mysql:
+            condition: service_healthy
+         redis:
+            condition: service_healthy
+      restart: always
       environment:
-         ADMINER_DEFAULT_SERVER: mysql # Сервер за замовчуванням
-         ADMINER_DESIGN: flat # Тема оформлення : flat, hever, dracula
+         WORDPRESS_DB_HOST: mysql:3306
+         WORDPRESS_DB_USER: ${MYSQL_USER}
+         WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+         WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+         WORDPRESS_DEBUG: ${WORDPRESS_DEBUG}
+         WORDPRESS_CONFIG_EXTRA: |
+            define('WP_MEMORY_LIMIT', '256M');
+            define('WP_REDIS_HOST', 'redis');
+            define('WP_REDIS_PORT', 6379);
+            define('WP_REDIS_DATABASE', 0);
+            define('WP_CACHE', true);
+            define('WP_REDIS_PREFIX', '${WORDPRESS_TABLE_PREFIX}');
+         WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
+      volumes:
+         - './.data/wordpress:/var/www/html'
+         - './themes:/var/www/html/wp-content/themes'
+         - './plugins:/var/www/html/wp-content/plugins'
       networks:
-         - wordpress-network # Підключення до мережі
-      ports:
-         - '8080:8080' # Порт для доступу до Adminer
+         - wp-network
 
-   # # MailHog для тестування електронної пошти
-   mailhog:
-      image: mailhog/mailhog # Останння версія MailHog
+   # Caddy веб-сервер з автоматичним SSL
+   caddy:
+      image: caddy:alpine
+      depends_on:
+         - wordpress
       ports:
-         - '1025:1025' # SMTP порт
-         - '8025:8025' # Веб-інтерфейс
+         - '80:80'
+         - '443:443'
+      volumes:
+         - './.data/wordpress:/var/www/html'
+         - './Caddyfile:/etc/caddy/Caddyfile'
+         - './.data/caddy:/data'
+         - './.data/caddy-config:/config'
       networks:
-         - wordpress-network # Підключення до мережі
+         - wp-network
+      restart: always
 
    # Redis для кешування
    redis:
-      image: redis:alpine # Легка версія Redis
-      restart: always # Автоматичний перезапуск при збої
+      image: redis:alpine
+      restart: always
       volumes:
-         - redis_data:/data # Для збереження даних
-      healthcheck:
-         test: ['CMD', 'redis-cli', 'ping'] # Перевірка доступності Redis
-         interval: 30s # Інтервал перевірки
-         timeout: 10s # Таймаут перевірки
-         retries: 3 # Кількість спроб
+         - './.data/redis:/data'
       networks:
-         - wordpress-network # Підключення до мережі
+         - wp-network
+      healthcheck:
+         test: ['CMD', 'redis-cli', 'ping']
+         interval: 30s
+         timeout: 10s
+         retries: 3
 
-# Налаштування мережі
+   # Adminer для управління БД
+   adminer:
+      image: adminer:latest
+      depends_on:
+         mysql:
+            condition: service_healthy
+      restart: always
+      environment:
+         ADMINER_DEFAULT_SERVER: mysql
+         ADMINER_DESIGN: dracula
+      ports:
+         - '8080:8080'
+      networks:
+         - wp-network
+
+   # MailHog для тестування електронної пошти
+   mailhog:
+      image: mailhog/mailhog
+      restart: always
+      ports:
+         - '1025:1025'  # SMTP порт
+         - '8025:8025'  # Веб-інтерфейс
+      networks:
+         - wp-network
+
+# Мережа
 networks:
-   wordpress-network:
-      driver: bridge # Використання bridge драйвера для мережі
-
-# Налаштування volume
-volumes:
-   redis_data: # Додаємо volume для Redis
+   wp-network:
+      driver: bridge

@@ -1,185 +1,162 @@
 #!/bin/bash
-set -e  # Зупиняти скрипт при помилках
+set -e
 
-# Завантажуємо змінні з .env файлу
-if [ -f .env ]; then
-    echo "Знайдено .env файл"
-    export $(cat .env | grep -v '#' | awk '/=/ {print $1}')
-    
-    # Додаємо діагностичний вивід
-    echo "Завантажені змінні з .env:"
-    echo "DOMAIN_NAME = ${DOMAIN_NAME}"
-    echo "MYSQL_USER = ${MYSQL_USER}"
-    echo "MYSQL_DATABASE = ${MYSQL_DATABASE}"
-fi
+echo "🚀 WordPress Docker Setup з Caddy"
+echo "=================================="
 
-# Додати перевірку наявності Docker
+# Перевірка Docker
 if ! command -v docker &> /dev/null; then
-    echo "Docker не встановлено. Будь ласка, встановіть Docker спочатку."
+    echo "❌ Docker не встановлено. Встановіть Docker спочатку."
     exit 1
 fi
 
-# Додати функцію очистки при виході
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ Docker Compose не встановлено."
+    exit 1
+fi
+
+# Функція очистки
 cleanup() {
     if [ $? -ne 0 ]; then
-        echo "Сталася помилка. Очищення..."
-        rm -rf .srv nginx themes plugins 2>/dev/null
+        echo "❌ Помилка встановлення. Очищення..."
+        docker-compose down 2>/dev/null || true
+        rm -rf .data themes plugins 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
 
-# Додати перевірку наявності SSL сертифікатів
-if [ ! -f "nginx/ssl/cert.pem" ] || [ ! -f "nginx/ssl/key.pem" ]; then
-    echo "Генерування self-signed SSL сертифікатів..."
-    mkdir -p nginx/ssl
+# Створення необхідних директорій
+echo "📁 Створення директорій..."
+mkdir -p .data/{mysql,wordpress,redis,caddy,caddy-config}
+mkdir -p themes plugins
+
+# Налаштування змінних середовища
+if [ ! -f .env ]; then
+    echo "⚙️  Налаштування змінних середовища..."
     
-    # Виправлена команда для localhost
-    MSYS_NO_PATHCONV=1 openssl req -x509 \
-        -nodes \
-        -days 365 \
-        -newkey rsa:2048 \
-        -keyout nginx/ssl/key.pem \
-        -out nginx/ssl/cert.pem \
-        -subj "/C=UA/ST=State/L=City/O=Organization/CN=localhost" \
-        -addext "subjectAltName=DNS:localhost"
+    # Функція для безпечного введення
+    read_secure() {
+        local prompt=$1
+        local var_name=$2
+        local default_val=$3
+        
+        if [ -n "$default_val" ]; then
+            read -p "$prompt [$default_val]: " input
+            eval "$var_name=\${input:-$default_val}"
+        else
+            while true; do
+                read -p "$prompt: " input
+                if [ -n "$input" ]; then
+                    eval "$var_name=$input"
+                    break
+                else
+                    echo "❌ Значення не може бути пустим!"
+                fi
+            done
+        fi
+    }
+    
+    # Збираємо дані
+    read_secure "MySQL Root пароль" MYSQL_ROOT_PASSWORD
+    read_secure "Назва бази даних" MYSQL_DATABASE "wordpress_db"
+    read_secure "MySQL користувач" MYSQL_USER "wp_user"  
+    read_secure "MySQL пароль користувача" MYSQL_PASSWORD
+    read_secure "Префікс таблиць WordPress" WORDPRESS_TABLE_PREFIX "wp_"
+    read_secure "WordPress Debug (0/1)" WORDPRESS_DEBUG "0"
+    read_secure "Домен" DOMAIN "localhost"
+    
+    # Створюємо .env файл
+    cat > .env << EOF
+# MySQL налаштування
+MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
+MYSQL_DATABASE=$MYSQL_DATABASE
+MYSQL_USER=$MYSQL_USER
+MYSQL_PASSWORD=$MYSQL_PASSWORD
+
+# WordPress налаштування
+WORDPRESS_TABLE_PREFIX=$WORDPRESS_TABLE_PREFIX
+WORDPRESS_DEBUG=$WORDPRESS_DEBUG
+
+# Домен
+DOMAIN=$DOMAIN
+EOF
+    
+    echo "✅ Файл .env створено!"
 fi
 
-mkdir -p .srv/database
-mkdir -p .srv/wordpress
-mkdir -p nginx/conf.d
-mkdir -p nginx/ssl
-mkdir -p nginx/logs
-mkdir -p themes
-mkdir -p plugins
+# Завантаження змінних
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
 
-# Створення конфігурації Nginx
-cat > nginx/conf.d/default.conf << 'EOF'
-server {
-    listen 80;
-    server_name localhost;
-    root /var/www/html;
-    index index.php;
-
-    location / {
-        try_files $uri $uri/ /index.php?$args;
+# Створення Caddyfile якщо не існує
+if [ ! -f Caddyfile ]; then
+    echo "📝 Створення Caddyfile..."
+    cat > Caddyfile << 'EOF'
+localhost {
+    tls internal
+    root * /var/www/html
+    file_server
+    php_fastcgi wordpress:9000 {
+        index index.php
     }
-
-    location ~ \.php$ {
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass wordpress:9000;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param PATH_INFO $fastcgi_path_info;
+    try_files {path} {path}/ /index.php?{query}
+    
+    @static {
+        file
+        path *.css *.js *.ico *.png *.jpg *.jpeg *.gif *.svg *.woff *.woff2 *.ttf *.eot
+    }
+    header @static Cache-Control "public, max-age=31536000"
+    
+    @forbidden {
+        path /.* /wp-config.php /readme.html /license.txt
+    }
+    respond @forbidden 403
+    
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-XSS-Protection "1; mode=block"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
     }
 }
 EOF
+fi
 
-
-echo "Налаштування MySQL параметрів"
-echo "----------------------------"
-
-# Функція для валідації введених даних
-validate_input() {
-    if [ -z "$1" ]; then
-        echo "Помилка: значення не може бути пустим"
-        exit 1
-    fi
-}
-
-# Запитуємо значення з валідацією
-while true; do
-    read -p "Введіть ПАРОЛЬ для root користувача MySQL: " root_password
-    validate_input "$root_password"
-    if [ $? -eq 0 ]; then break; fi
-done
-
-while true; do
-    read -p "Введіть НАЗВУ БАЗИ даних: " database
-    validate_input "$database"
-    if [ $? -eq 0 ]; then break; fi
-done
-
-while true; do
-    read -p "Введіть ІМ'Я користувача MySQL: " user
-    validate_input "$user"
-    if [ $? -eq 0 ]; then break; fi
-done
-
-while true; do
-    read -p "Введіть ПАРОЛЬ для користувача MySQL: " password
-    validate_input "$password"
-    if [ $? -eq 0 ]; then break; fi
-done
-
-# Додані нові цикли
-while true; do
-    read -p "Введіть ПРЕФІКС таблиць WordPress (wp_): " table_prefix
-    table_prefix=${table_prefix:-wp_}
-    validate_input "$table_prefix"
-    if [ $? -eq 0 ]; then break; fi
-done
-
-while true; do
-    read -p "Введіть debug mode (0/1): " debug_mode
-    debug_mode=${debug_mode:-0}
-    if [[ "$debug_mode" =~ ^[0-1]$ ]]; then break; fi
-    echo "Помилка: введіть 0 або 1"
-done
-
-# Створюємо .env файл
-cat > .env << EOF
-MYSQL_ROOT_PASSWORD=${root_password}
-MYSQL_DATABASE=${database}
-MYSQL_USER=${user}
-MYSQL_PASSWORD=${password}
-WORDPRESS_TABLE_PREFIX=${table_prefix}
-WORDPRESS_DEBUG=${debug_mode}
-EOF
-
-# Перезавантажуємо змінні з нового .env файлу
-export $(cat .env | grep -v '#' | awk '/=/ {print $1}')
-
-echo "Файл .env успішно створено!"
-echo "============================"
-echo "Запускаємо docker-compose..."
-
-# Запускаємо docker-compose
+# Запуск Docker Compose
+echo "🐳 Запуск Docker контейнерів..."
 docker-compose up -d
 
-# Функція для перевірки доступності порту
-check_port() {
-    local port=$1
-    timeout 1 bash -c "</dev/tcp/localhost/$port" &>/dev/null
-    return $?
-}
+# Очікування запуску сервісів
+echo "⏳ Очікування запуску сервісів..."
+sleep 10
 
-# Очікуємо поки всі сервіси запустяться
-echo "Очікуємо запуску сервісів..."
-sleep 5
-
-# Виводимо інформацію про доступні сервіси
-echo ""
-echo "=== Доступні сервіси ==="
-echo "WordPress:"
-echo "🌐 http://localhost"
-echo "🔒 https://localhost"
-
-if check_port 8080; then
-    echo ""
-    echo "Adminer (управління базою даних):"
-    echo "🗄️  http://localhost:8080"
-    echo "   Сервер: mysql"
-    echo "   Користувач: ${MYSQL_USER}"
-    echo "   База даних: ${MYSQL_DATABASE}"
-fi
-
-if check_port 8025; then
-    echo ""
-    echo "MailHog (тестування пошти):"
-    echo "📧 http://localhost:8025"
-    echo "   SMTP: localhost:1025"
-fi
+# Перевірка статусу
+echo "🔍 Перевірка статусу сервісів..."
+docker-compose ps
 
 echo ""
-echo "✅ Всі сервіси запущено успішно!"
+echo "🎉 Встановлення завершено!"
+echo "=========================="
+echo ""
+echo "📍 Доступні сервіси:"
+echo "🌐 WordPress: https://localhost"
+echo "🗄️  Adminer: http://localhost:8080"
+echo "   - Сервер: mysql"
+echo "   - Користувач: $MYSQL_USER"
+echo "   - База даних: $MYSQL_DATABASE"
+echo "📧 MailHog: http://localhost:8025"
+echo "   - SMTP: localhost:1025"
+echo ""
+echo "🛠️  Корисні команди:"
+echo "   docker-compose logs -f    # Перегляд логів"
+echo "   docker-compose down       # Зупинка сервісів"
+echo "   docker-compose restart    # Перезапуск"
+echo ""
+echo "📁 Директорії:"
+echo "   themes/   - Ваші теми WordPress"
+echo "   plugins/  - Ваші плагіни WordPress"
+echo "   .data/    - Дані контейнерів"
+
+# Зняття trap після успішного завершення
+trap - EXIT
