@@ -54,6 +54,5 @@ Thumbs.db
 
 
 # Тільки для збірки. Для реального пректа - прибрати
-/themes/
-/plugins/
 /.data/
+/wp-content/

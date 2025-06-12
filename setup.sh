@@ -20,7 +20,7 @@ cleanup() {
     if [ $? -ne 0 ]; then
         echo "❌ Помилка встановлення. Очищення..."
         docker-compose down 2>/dev/null || true
-        rm -rf .data themes plugins 2>/dev/null || true
+        rm -rf .data wp-content 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -28,7 +28,8 @@ trap cleanup EXIT
 # Створення необхідних директорій
 echo "📁 Створення директорій..."
 mkdir -p .data/{mysql,wordpress,redis,caddy,caddy-config}
-mkdir -p themes plugins
+# ЗМІНЕНО: створюємо wp-content замість окремих themes/plugins
+mkdir -p wp-content/{themes,plugins,uploads}
 
 # Налаштування змінних середовища
 if [ ! -f .env ]; then
@@ -123,6 +124,26 @@ localhost {
 EOF
 fi
 
+# ДОДАНО: Створення базового .htaccess для WordPress
+if [ ! -f wp-content/.htaccess ]; then
+    echo "📝 Створення .htaccess..."
+    cat > wp-content/.htaccess << 'EOF'
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+EOF
+fi
+
+# ДОДАНО: Створення індексного файлу для безпеки
+echo "<?php // Silence is golden" > wp-content/index.php
+
 # Запуск Docker Compose
 echo "🐳 Запуск Docker контейнерів..."
 docker-compose up -d
@@ -154,9 +175,10 @@ echo "   docker-compose down       # Зупинка сервісів"
 echo "   docker-compose restart    # Перезапуск"
 echo ""
 echo "📁 Директорії:"
-echo "   themes/   - Ваші теми WordPress"
-echo "   plugins/  - Ваші плагіни WordPress"
-echo "   .data/    - Дані контейнерів"
+echo "   wp-content/themes/   - Ваші теми WordPress"
+echo "   wp-content/plugins/  - Ваші плагіни WordPress"
+echo "   wp-content/uploads/  - Завантажені файли"
+echo "   .data/               - Дані контейнерів"
 
 # Зняття trap після успішного завершення
 trap - EXIT

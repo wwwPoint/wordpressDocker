@@ -146,11 +146,13 @@ echo ""
 # Інформація про файли
 echo -e "${BLUE}${INFO} Директорії проекту:${NC}"
 echo "─────────────────────────────────"
-echo -e "  ${CYAN}themes/${NC}     - Кастомні теми WordPress"
-echo -e "  ${CYAN}plugins/${NC}    - Кастомні плагіни WordPress"
-echo -e "  ${CYAN}.data/${NC}      - Дані контейнерів (БД, файли WP, кеш)"
-echo -e "  ${CYAN}.env${NC}        - Змінні середовища"
-echo -e "  ${CYAN}Caddyfile${NC}   - Конфігурація веб-сервера"
+echo -e "  ${CYAN}wp-content/${NC}           - Весь контент WordPress"
+echo -e "  ${CYAN}wp-content/themes/${NC}    - Кастомні теми WordPress"
+echo -e "  ${CYAN}wp-content/plugins/${NC}   - Кастомні плагіни WordPress"
+echo -e "  ${CYAN}wp-content/uploads/${NC}   - Завантажені медіафайли"
+echo -e "  ${CYAN}.data/${NC}               - Дані контейнерів (БД, файли WP, кеш)"
+echo -e "  ${CYAN}.env${NC}                 - Змінні середовища"
+echo -e "  ${CYAN}Caddyfile${NC}            - Конфігурація веб-сервера"
 
 echo ""
 
@@ -162,6 +164,26 @@ echo -e "  ${CYAN}Префікс таблиць:${NC}        ${WORDPRESS_TABLE_P
 echo -e "  ${CYAN}Debug режим:${NC}            ${WORDPRESS_DEBUG:-0}"
 echo -e "  ${CYAN}Redis кеш:${NC}              Увімкнено"
 echo -e "  ${CYAN}Файли WordPress:${NC}        .data/wordpress/"
+echo -e "  ${CYAN}Кастомний контент:${NC}      wp-content/"
+
+echo ""
+
+# Перевірка структури файлів
+echo -e "${BLUE}${INFO} Структура wp-content:${NC}"
+echo "─────────────────────────────────"
+if [ -d "wp-content" ]; then
+    themes_count=$(find wp-content/themes -maxdepth 1 -type d 2>/dev/null | wc -l)
+    plugins_count=$(find wp-content/plugins -maxdepth 1 -type d 2>/dev/null | wc -l)
+    uploads_size=$(du -sh wp-content/uploads 2>/dev/null | cut -f1 || echo "0")
+    
+    echo -e "  ${GREEN}${SUCCESS} wp-content створено${NC}"
+    echo -e "  ${CYAN}├─ Теми:${NC} $((themes_count-1)) папок"
+    echo -e "  ${CYAN}├─ Плагіни:${NC} $((plugins_count-1)) папок"
+    echo -e "  ${CYAN}└─ Завантаження:${NC} ${uploads_size}"
+else
+    echo -e "  ${RED}${WARNING} wp-content не знайдено${NC}"
+    echo -e "  ${YELLOW}Запустіть setup.sh або створіть вручну${NC}"
+fi
 
 echo ""
 

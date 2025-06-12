@@ -1,4 +1,4 @@
-# Оптимізована конфігурація з Caddy
+# Виправлена конфігурація з правильним доступом до тем
 services:
    # База даних MySQL
    mysql:
@@ -47,8 +47,8 @@ services:
          WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
       volumes:
          - './.data/wordpress:/var/www/html'
-         - './themes:/var/www/html/wp-content/themes'
-         - './plugins:/var/www/html/wp-content/plugins'
+         # ВИПРАВЛЕНО: Тільки один том для wp-content
+         - './wp-content:/var/www/html/wp-content'
       networks:
          - wp-network
 
@@ -62,6 +62,8 @@ services:
          - '443:443'
       volumes:
          - './.data/wordpress:/var/www/html'
+         # ВИПРАВЛЕНО: Тільки один том для wp-content
+         - './wp-content:/var/www/html/wp-content'
          - './Caddyfile:/etc/caddy/Caddyfile'
          - './.data/caddy:/data'
          - './.data/caddy-config:/config'
