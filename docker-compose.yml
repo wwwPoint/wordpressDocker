@@ -47,7 +47,6 @@ services:
          WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX}
       volumes:
          - './.data/wordpress:/var/www/html'
-         # ВИПРАВЛЕНО: Тільки один том для wp-content
          - './wp-content:/var/www/html/wp-content'
       networks:
          - wp-network
@@ -62,7 +61,6 @@ services:
          - '443:443'
       volumes:
          - './.data/wordpress:/var/www/html'
-         # ВИПРАВЛЕНО: Тільки один том для wp-content
          - './wp-content:/var/www/html/wp-content'
          - './Caddyfile:/etc/caddy/Caddyfile'
          - './.data/caddy:/data'

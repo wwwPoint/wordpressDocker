@@ -64,7 +64,6 @@ if [ ! -f .env ]; then
     read_secure "MySQL пароль користувача" MYSQL_PASSWORD
     read_secure "Префікс таблиць WordPress" WORDPRESS_TABLE_PREFIX "wp_"
     read_secure "WordPress Debug (0/1)" WORDPRESS_DEBUG "0"
-    read_secure "Домен" DOMAIN "localhost"
     
     # Створюємо .env файл
     cat > .env << EOF
@@ -78,8 +77,6 @@ MYSQL_PASSWORD=$MYSQL_PASSWORD
 WORDPRESS_TABLE_PREFIX=$WORDPRESS_TABLE_PREFIX
 WORDPRESS_DEBUG=$WORDPRESS_DEBUG
 
-# Домен
-DOMAIN=$DOMAIN
 EOF
     
     echo "✅ Файл .env створено!"
