@@ -137,9 +137,9 @@ check_containers() {
     exit 1
 }
 
-# Створення резервної копії бази даних
-backup_database() {
-    print_status "Створення резервної копії бази даних..."
+# Створення резервної копії оригінальної бази даних
+backup_original_database() {
+    print_status "Створення резервної копії оригінальної бази даних..."
     
     local backup_dir="migration-backup-$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$backup_dir"
@@ -152,7 +152,7 @@ backup_database() {
         $MYSQL_DATABASE > "$backup_dir/database_original.sql"
     
     if [ $? -eq 0 ]; then
-        print_success "Резервна копія створена: $backup_dir/database_original.sql"
+        print_success "Оригінальна резервна копія створена: $backup_dir/database_original.sql"
         echo "$backup_dir" > .migration_backup_dir
     else
         print_error "Помилка створення резервної копії!"
@@ -160,9 +160,42 @@ backup_database() {
     fi
 }
 
-# Оновлення домену в базі даних
-update_domain_in_database() {
-    print_status "Оновлення домену в базі даних..."
+# Створення тимчасової бази даних для міграції
+create_temp_database() {
+    print_status "Створення тимчасової бази даних для міграції..."
+    
+    local backup_dir=$(cat .migration_backup_dir)
+    TEMP_DATABASE="${MYSQL_DATABASE}_migration_temp"
+    
+    # Створюємо тимчасову базу даних
+    docker-compose exec -T mysql mysql \
+        -u root -p$MYSQL_ROOT_PASSWORD \
+        -e "DROP DATABASE IF EXISTS $TEMP_DATABASE; CREATE DATABASE $TEMP_DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    
+    if [ $? -eq 0 ]; then
+        print_success "Тимчасова база даних створена: $TEMP_DATABASE"
+    else
+        print_error "Помилка створення тимчасової бази даних!"
+        exit 1
+    fi
+    
+    # Імпортуємо оригінальні дані в тимчасову базу
+    print_status "Імпорт даних в тимчасову базу даних..."
+    docker-compose exec -T mysql mysql \
+        -u root -p$MYSQL_ROOT_PASSWORD \
+        $TEMP_DATABASE < "$backup_dir/database_original.sql"
+    
+    if [ $? -eq 0 ]; then
+        print_success "Дані імпортовано в тимчасову базу даних"
+    else
+        print_error "Помилка імпорту даних в тимчасову базу даних!"
+        exit 1
+    fi
+}
+
+# Оновлення домену в тимчасовій базі даних
+update_domain_in_temp_database() {
+    print_status "Оновлення домену в тимчасовій базі даних..."
     
     local backup_dir=$(cat .migration_backup_dir)
     
@@ -240,22 +273,22 @@ FROM ${WORDPRESS_TABLE_PREFIX}options
 WHERE option_name IN ('home', 'siteurl');
 EOF
 
-    # Виконуємо SQL скрипт
+    # Виконуємо SQL скрипт на тимчасовій базі даних
     docker-compose exec -T mysql mysql \
         -u root -p$MYSQL_ROOT_PASSWORD \
-        $MYSQL_DATABASE < "$backup_dir/update_domain.sql"
+        $TEMP_DATABASE < "$backup_dir/update_domain.sql"
     
     if [ $? -eq 0 ]; then
-        print_success "Домен оновлено в базі даних"
+        print_success "Домен оновлено в тимчасовій базі даних"
     else
-        print_error "Помилка оновлення домену в базі даних!"
+        print_error "Помилка оновлення домену в тимчасовій базі даних!"
         exit 1
     fi
 }
 
-# Створення дампу оновленої бази даних
+# Створення дампу продакшн бази даних
 create_production_database_dump() {
-    print_status "Створення дампу оновленої бази даних..."
+    print_status "Створення дампу продакшн бази даних..."
     
     local backup_dir=$(cat .migration_backup_dir)
     
@@ -264,13 +297,28 @@ create_production_database_dump() {
         --single-transaction \
         --routines \
         --triggers \
-        $MYSQL_DATABASE > "$backup_dir/database_production.sql"
+        $TEMP_DATABASE > "$backup_dir/database_production.sql"
     
     if [ $? -eq 0 ]; then
         print_success "Продакшн дамп створено: $backup_dir/database_production.sql"
     else
         print_error "Помилка створення продакшн дампу!"
         exit 1
+    fi
+}
+
+# Очищення тимчасової бази даних
+cleanup_temp_database() {
+    print_status "Очищення тимчасової бази даних..."
+    
+    docker-compose exec -T mysql mysql \
+        -u root -p$MYSQL_ROOT_PASSWORD \
+        -e "DROP DATABASE IF EXISTS $TEMP_DATABASE;"
+    
+    if [ $? -eq 0 ]; then
+        print_success "Тимчасову базу даних видалено"
+    else
+        print_warning "Не вдалося видалити тимчасову базу даних: $TEMP_DATABASE"
     fi
 }
 
@@ -344,6 +392,8 @@ create_deployment_instructions() {
 - Таблиці префікс: $WORDPRESS_TABLE_PREFIX
 
 ⚠️  ВАЖЛИВО:
+- Ваша локальна база даних НЕ була змінена
+- Всі зміни були внесені лише в експортовані файли
 - Перевірте всі URL в контенті після розгортання
 - Оновіть налаштування плагінів, що зберігають URL
 - Протестуйте функціональність сайту
@@ -353,25 +403,27 @@ create_deployment_instructions() {
 - Змініть паролі доступу до БД
 - Оновіть WordPress salt ключі в wp-config.php
 - Встановіть останні версії WordPress та плагінів
+
+💡 ВІДНОВЛЕННЯ ЛОКАЛЬНОГО САЙТУ:
+Ваш локальний сайт залишився незміненим і продовжує працювати.
 EOF
 
     print_success "Інструкції створено: $backup_dir/DEPLOYMENT_INSTRUCTIONS.txt"
 }
 
-# Відкат змін (якщо потрібно)
-restore_original_database() {
-    print_status "Відкат до оригінальної бази даних..."
+# Перевірка стану локальної бази даних
+verify_local_database_unchanged() {
+    print_status "Перевірка що локальна база даних не змінена..."
     
-    local backup_dir=$(cat .migration_backup_dir)
+    # Перевіряємо що URL в основній базі залишилися незмінними
+    local current_urls=$(docker-compose exec -T mysql mysql \
+        -u root -p$MYSQL_ROOT_PASSWORD \
+        -se "SELECT option_value FROM ${MYSQL_DATABASE}.${WORDPRESS_TABLE_PREFIX}options WHERE option_name IN ('home', 'siteurl');" | tr '\n' ' ')
     
-    if [ -f "$backup_dir/database_original.sql" ]; then
-        docker-compose exec -T mysql mysql \
-            -u root -p$MYSQL_ROOT_PASSWORD \
-            $MYSQL_DATABASE < "$backup_dir/database_original.sql"
-        
-        print_success "База даних відновлена до оригінального стану"
+    if echo "$current_urls" | grep -q "localhost"; then
+        print_success "Локальна база даних залишилася незміненою"
     else
-        print_error "Оригінальна резервна копія не знайдена!"
+        print_warning "УВАГА: Схоже, що локальна база даних була змінена!"
     fi
 }
 
@@ -385,23 +437,27 @@ main() {
     get_new_domain
     
     echo ""
-    print_warning "УВАГА: Цей скрипт змінить домен в базі даних!"
-    print_warning "Переконайтеся, що у вас є резервна копія!"
+    print_status "ІНФОРМАЦІЯ: Цей скрипт НЕ змінює вашу локальну базу даних!"
+    print_status "Всі зміни будуть внесені лише в експортовані файли."
+    print_status "Ваш локальний сайт продовжить працювати як раніше."
     echo ""
-    read -p "Продовжити? (y/N): " -n 1 -r
+    read -p "Продовжити? (Y/n): " -n 1 -r
     echo
     
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
         print_status "Операцію скасовано користувачем"
         exit 0
     fi
     
     check_containers
-    backup_database
-    update_domain_in_database
+    backup_original_database
+    create_temp_database
+    update_domain_in_temp_database
     create_production_database_dump
+    cleanup_temp_database
     archive_wp_content
     create_deployment_instructions
+    verify_local_database_unchanged
     
     local backup_dir=$(cat .migration_backup_dir)
     
@@ -410,54 +466,27 @@ main() {
     echo ""
     print_status "📁 Всі файли збережено в: $backup_dir"
     print_status "📋 Прочитайте DEPLOYMENT_INSTRUCTIONS.txt для інструкцій"
-    echo ""
-    print_warning "💡 Для відкату змін запустіть:"
-    echo "   ./migrate-to-production.sh --restore"
+    print_status "💡 Ваша локальна база даних залишилася незміненою"
     
     # Очищення тимчасових файлів
     rm -f .migration_backup_dir
 }
 
-# Функція відкату
-restore() {
-    print_status "Режим відкату..."
-    
-    if [ ! -f .env ]; then
-        print_error "Файл .env не знайдено!"
-        exit 1
-    fi
-    
-    load_env
-    check_containers
-    
-    # Знаходимо останню резервну копію
-    local latest_backup=$(ls -1d migration-backup-* 2>/dev/null | tail -1)
-    
-    if [ -z "$latest_backup" ]; then
-        print_error "Резервні копії не знайдено!"
-        exit 1
-    fi
-    
-    echo "$latest_backup" > .migration_backup_dir
-    restore_original_database
-    rm -f .migration_backup_dir
-    
-    print_success "Відкат завершено!"
-}
-
 # Обробка аргументів командного рядка
 case "${1:-}" in
-    --restore)
-        restore
-        ;;
     --help|-h)
         echo "Використання: $0 [ОПЦІЇ]"
         echo ""
         echo "ОПЦІЇ:"
-        echo "  --restore    Відкат до оригінальної бази даних"
         echo "  --help, -h   Показати цю довідку"
         echo ""
-        echo "Без параметрів: запустити процес міграції"
+        echo "Цей скрипт створює файли для розгортання WordPress на продакшн сервері"
+        echo "БЕЗ ЗМІНИ вашої локальної бази даних."
+        echo ""
+        echo "Створювані файли:"
+        echo "  - database_production.sql (база даних з оновленими URL)"
+        echo "  - wp-content архів"
+        echo "  - DEPLOYMENT_INSTRUCTIONS.txt (інструкції з розгортання)"
         ;;
     *)
         main
